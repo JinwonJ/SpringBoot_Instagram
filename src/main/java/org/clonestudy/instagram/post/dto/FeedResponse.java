@@ -1,4 +1,8 @@
 package org.clonestudy.instagram.post.dto;
 
-public class FeedResponse {
-}
+import java.util.List;
+
+public record FeedResponse(
+        List<FeedItemResponse> items,
+        String nextCursor // 없으면 null
+) {}

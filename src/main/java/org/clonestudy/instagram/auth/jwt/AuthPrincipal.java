@@ -1,4 +1,3 @@
 package org.clonestudy.instagram.auth.jwt;
 
-public class AuthPrincipal {
-}
+public record AuthPrincipal(Long userId, String username) {}

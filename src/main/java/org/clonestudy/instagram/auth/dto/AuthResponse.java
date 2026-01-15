@@ -1,4 +1,6 @@
 package org.clonestudy.instagram.auth.dto;
 
-public class AuthResponse {
-}
+public record AuthResponse(
+        String accessToken,
+        String refreshToken
+) {}

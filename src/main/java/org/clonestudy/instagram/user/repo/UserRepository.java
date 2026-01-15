@@ -1,4 +1,4 @@
-package org.clonestudy.instagram.follow.repo;
+package org.clonestudy.instagram.user.repo;
 
 import org.clonestudy.instagram.user.domain.User;
 import org.springframework.data.jpa.repository.JpaRepository;
