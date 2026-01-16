@@ -26,7 +26,27 @@ public class AuthService {
     private final JwtTokenProvider tokenProvider;
     private final RefreshTokenRepository refreshTokenRepository;
 
-    // 로그인: access + refresh 발급, refresh는 deviceId 단위로 저장(해시)
+    // 회원가입
+    @Transactional
+    public SignupResponse signup(SignupRequest req) {
+        if (userRepository.existsByEmail(req.email())) {
+            throw new IllegalArgumentException("이미 사용 중인 이메일입니다.");
+        }
+        if (userRepository.existsByUsername(req.username())) {
+            throw new IllegalArgumentException("이미 사용 중인 username 입니다.");
+        }
+
+        User user = User.builder()
+                .email(req.email())
+                .username(req.username())
+                .passwordHash(passwordEncoder.encode(req.password()))
+                .build();
+
+        User saved = userRepository.save(user);
+        return new SignupResponse(saved.getId(), saved.getEmail(), saved.getUsername());
+    }
+
+    // ✅ 로그인: access + refresh 발급, refresh는 deviceId 단위로 저장(해시)
     @Transactional
     public AuthResponse login(LoginRequest req, HttpServletRequest http) {
         User user = userRepository.findByEmail(req.email())
@@ -36,24 +56,35 @@ public class AuthService {
             throw new IllegalArgumentException("이메일 또는 비밀번호가 올바르지 않습니다.");
         }
 
+        String deviceId = req.deviceId();
+
         String access = tokenProvider.createAccessToken(user.getId(), user.getUsername());
         String refresh = tokenProvider.createRefreshToken(user.getId());
 
-        String deviceId = req.deviceId();
+        Instant now = Instant.now();
 
-        // 같은 deviceId로 재로그인하면 기존 세션 revoke 후 교체
-        refreshTokenRepository.findByUser_IdAndDeviceId(user.getId(), deviceId)
-                .ifPresent(existing -> existing.setRevokedAt(Instant.now()));
+        // ✅ 핵심: 같은 (userId, deviceId)는 "insert"가 아니라 "update"
+        RefreshToken session = refreshTokenRepository.findByUser_IdAndDeviceId(user.getId(), deviceId)
+                .orElse(null);
 
-        refreshTokenRepository.save(RefreshToken.builder()
-                .user(user)
-                .deviceId(deviceId)
-                .tokenHash(sha256(refresh))
-                .expiresAt(tokenProvider.getExpiry(refresh))
-                .userAgent(http.getHeader("User-Agent"))
-                .ip(getClientIp(http))
-                .lastUsedAt(Instant.now())
-                .build());
+        if (session == null) {
+            // 처음 로그인한 기기라면 신규 생성
+            session = RefreshToken.builder()
+                    .user(user)
+                    .deviceId(deviceId)
+                    .createdAt(now) // 엔티티에 @PrePersist가 있으면 이 줄 없어도 됨
+                    .build();
+        }
+
+        // 기존 세션이 있든 없든, 토큰/만료/정보를 갱신(=rotate 느낌)
+        session.setTokenHash(sha256(refresh));
+        session.setExpiresAt(tokenProvider.getExpiry(refresh));
+        session.setUserAgent(http.getHeader("User-Agent"));
+        session.setIp(getClientIp(http));
+        session.setLastUsedAt(now);
+        session.setRevokedAt(null); // 재로그인하면 다시 활성화
+
+        refreshTokenRepository.save(session);
 
         return new AuthResponse(access, refresh);
     }
@@ -76,9 +107,8 @@ public class AuthService {
         if (session.isRevoked()) throw new IllegalArgumentException("폐기된 refreshToken 입니다. 다시 로그인하세요.");
         if (session.isExpired()) throw new IllegalArgumentException("만료된 refreshToken 입니다. 다시 로그인하세요.");
 
-        // 요청으로 온 refresh가 지금 기기 세션의 refresh와 일치해야 함
         if (!session.getTokenHash().equals(sha256(refresh))) {
-            session.setRevokedAt(Instant.now()); // 탈취/불일치 의심 -> 해당 세션 폐기
+            session.setRevokedAt(Instant.now());
             throw new IllegalArgumentException("refreshToken 불일치(탈취 의심). 다시 로그인하세요.");
         }
 
@@ -87,19 +117,16 @@ public class AuthService {
 
         String newAccess = tokenProvider.createAccessToken(user.getId(), user.getUsername());
 
-        // ✅ refresh 회전: 기존 세션 revoke + 새 refresh 저장
+        // refresh 회전: 기존 row를 그대로 업데이트(권장)
         String newRefresh = tokenProvider.createRefreshToken(userId);
-        session.setRevokedAt(Instant.now());
+        session.setTokenHash(sha256(newRefresh));
+        session.setExpiresAt(tokenProvider.getExpiry(newRefresh));
+        session.setUserAgent(http.getHeader("User-Agent"));
+        session.setIp(getClientIp(http));
+        session.setLastUsedAt(Instant.now());
+        session.setRevokedAt(null);
 
-        refreshTokenRepository.save(RefreshToken.builder()
-                .user(user)
-                .deviceId(deviceId)
-                .tokenHash(sha256(newRefresh))
-                .expiresAt(tokenProvider.getExpiry(newRefresh))
-                .userAgent(http.getHeader("User-Agent"))
-                .ip(getClientIp(http))
-                .lastUsedAt(Instant.now())
-                .build());
+        refreshTokenRepository.save(session);
 
         return new AuthResponse(newAccess, newRefresh);
     }
@@ -107,7 +134,6 @@ public class AuthService {
     // 현재 기기 로그아웃: refresh 세션 revoke
     @Transactional
     public void logout(LogoutRequest req) {
-        // deviceId도 받지만, 안전하게 tokenHash 기반으로 revoke
         refreshTokenRepository.findByTokenHash(sha256(req.refreshToken()))
                 .ifPresent(rt -> rt.setRevokedAt(Instant.now()));
     }

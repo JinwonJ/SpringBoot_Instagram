@@ -2,7 +2,12 @@ package org.clonestudy.instagram.comment.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import lombok.Getter;
 
-public record CommentUpdateRequest(
-        @NotBlank @Size(max=1000) String content
-) {}
+@Getter
+public class CommentUpdateRequest {
+
+    @NotBlank
+    @Size(max = 500)
+    private String content;
+}

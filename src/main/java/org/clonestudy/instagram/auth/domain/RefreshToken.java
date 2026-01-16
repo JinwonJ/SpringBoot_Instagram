@@ -7,59 +7,66 @@ import org.clonestudy.instagram.user.domain.User;
 import java.time.Instant;
 
 @Entity
-@Table(
-        name = "refresh_tokens",
+@Table(name = "refresh_tokens",
         indexes = {
-                @Index(name = "idx_refresh_tokens_user", columnList = "user_id"),
-                @Index(name = "idx_refresh_tokens_user_device", columnList = "user_id, deviceId"),
-                @Index(name = "idx_refresh_tokens_hash", columnList = "tokenHash", unique = true)
+                @Index(name = "ix_refresh_tokens_token_hash", columnList = "token_hash")
         },
         uniqueConstraints = {
-                @UniqueConstraint(name = "uk_user_device", columnNames = {"user_id", "deviceId"})
+                @UniqueConstraint(name = "ux_refresh_tokens_user_device", columnNames = {"user_id", "device_id"})
         }
 )
-@Getter @Setter
-@NoArgsConstructor @AllArgsConstructor
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
 @Builder
 public class RefreshToken {
 
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    // 사용자
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name="user_id")
+    @JoinColumn(name = "user_id")
     private User user;
 
-    @Column(nullable = false, length = 64, unique = true)
-    private String tokenHash;
-
-    @Column(nullable = false, length = 100)
+    // 기기 ID
+    @Column(name = "device_id", length = 100, nullable = false)
     private String deviceId;
 
-    @Column(length = 300)
-    private String userAgent;
+    // refresh token은 원문 저장 X, 해시만 저장
+    @Column(name = "token_hash", length = 64, nullable = false)
+    private String tokenHash;
 
-    @Column(length = 60)
-    private String ip;
-
-    @Column(nullable = false)
+    @Column(name = "expires_at", nullable = false)
     private Instant expiresAt;
 
-    @Column(nullable = false)
-    private Instant createdAt;
+    @Column(name = "user_agent", length = 255)
+    private String userAgent;
 
-    @Column(nullable = false)
+    @Column(name = "ip", length = 64)
+    private String ip;
+
+    @Column(name = "last_used_at")
     private Instant lastUsedAt;
 
+    @Column(name = "revoked_at")
     private Instant revokedAt;
+
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private Instant createdAt;
 
     @PrePersist
     void prePersist() {
-        Instant now = Instant.now();
-        if (createdAt == null) createdAt = now;
-        if (lastUsedAt == null) lastUsedAt = now;
+        if (createdAt == null) createdAt = Instant.now();
     }
 
-    public boolean isRevoked() { return revokedAt != null; }
-    public boolean isExpired() { return Instant.now().isAfter(expiresAt); }
+    public boolean isRevoked() {
+        return revokedAt != null;
+    }
+
+    public boolean isExpired() {
+        return expiresAt != null && expiresAt.isBefore(Instant.now());
+    }
 }

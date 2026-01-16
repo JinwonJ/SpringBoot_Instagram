@@ -190,9 +190,9 @@ app.upload.base-url=http://localhost:8080/uploads
 
 • 댓글 / 좋아요 기능  
 • 알림(Notification) 시스템  
-• 비공개 계정  
+• 비공개 계정 (진행중)
 • Redis 기반 Refresh Token 관리  
-• Next.js 프론트엔드 연동
+• Next.js 프론트엔드 연동 (진행중)
 
 ---
 

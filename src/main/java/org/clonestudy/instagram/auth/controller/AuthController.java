@@ -7,7 +7,6 @@ import org.clonestudy.instagram.auth.dto.*;
 import org.clonestudy.instagram.auth.jwt.AuthPrincipal;
 import org.clonestudy.instagram.auth.service.AuthService;
 import org.clonestudy.instagram.global.common.ApiResponse;
-import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -20,9 +19,14 @@ public class AuthController {
 
     private final AuthService authService;
 
+    @PostMapping("/signup")
+    public ApiResponse<SignupResponse> signup(@Valid @RequestBody SignupRequest req) {
+        return ApiResponse.ok(authService.signup(req));
+    }
+
     @PostMapping("/login")
-    public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest req, HttpServletRequest http) {
-        return ResponseEntity.ok(authService.login(req, http));
+    public ApiResponse<AuthResponse> login(@Valid @RequestBody LoginRequest req, HttpServletRequest http) {
+        return ApiResponse.ok(authService.login(req, http));
     }
 
     @PostMapping("/refresh")
