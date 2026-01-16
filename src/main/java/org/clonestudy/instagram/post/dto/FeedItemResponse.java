@@ -10,6 +10,7 @@ public record FeedItemResponse(
         String caption,
         List<String> imageUrls,
         Instant createdAt,
-        boolean liked,
-        long likeCount
+        boolean likedByMe,
+        long likeCount,
+        long commentCount
 ) {}
